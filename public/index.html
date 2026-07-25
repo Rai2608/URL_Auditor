@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Page Scan — URL Auditor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1b2027;
+    --ink-soft: #5b6472;
+    --paper: #f5f3ee;
+    --panel: #ffffff;
+    --line: #dfdad0;
+    --amber: #b5730a;
+    --amber-deep: #8a560a;
+    --good: #1f7a4d;
+    --bad: #b3261e;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: -1px -1px;
+    color: var(--ink);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 20px 80px;
+  }
+
+  .wrap { width: 100%; max-width: 720px; }
+
+  header { margin-bottom: 32px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber-deep);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .eyebrow .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 0 3px rgba(181,115,10,0.15);
+  }
+
+  h1 {
+    font-size: 30px;
+    line-height: 1.15;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+
+  header p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 15px;
+    max-width: 52ch;
+  }
+
+  form {
+    display: flex;
+    gap: 10px;
+    margin: 28px 0 6px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 6px;
+    box-shadow: 0 1px 0 rgba(27,32,39,0.03);
+  }
+
+  form:focus-within {
+    border-color: var(--amber);
+    box-shadow: 0 0 0 3px rgba(181,115,10,0.12);
+  }
+
+  #url-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: var(--mono);
+    font-size: 14.5px;
+    padding: 12px 10px;
+    color: var(--ink);
+  }
+
+  #url-input::placeholder { color: #a9a496; }
+
+  button#submit-btn {
+    border: none;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 14px;
+    padding: 0 22px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+    white-space: nowrap;
+  }
+
+  button#submit-btn:hover:not(:disabled) { background: var(--amber-deep); }
+  button#submit-btn:active:not(:disabled) { transform: scale(0.98); }
+  button#submit-btn:disabled { opacity: 0.55; cursor: default; }
+
+  .hint {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    margin: 4px 2px 0;
+  }
+
+  /* Scan line shown while loading */
+  .scan-track {
+    height: 2px;
+    width: 100%;
+    background: var(--line);
+    border-radius: 2px;
+    margin-top: 18px;
+    overflow: hidden;
+    display: none;
+  }
+  .scan-track.active { display: block; }
+  .scan-track .beam {
+    height: 100%;
+    width: 30%;
+    background: linear-gradient(90deg, transparent, var(--amber), transparent);
+    animation: sweep 1.1s ease-in-out infinite;
+  }
+  @keyframes sweep {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(333%); }
+  }
+
+  .status-line {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 10px;
+    min-height: 16px;
+  }
+
+  #error-box {
+    display: none;
+    margin-top: 22px;
+    border: 1px solid #e3b3ae;
+    background: #fbeceb;
+    color: var(--bad);
+    border-radius: 10px;
+    padding: 16px 18px;
+    font-size: 14px;
+  }
+  #error-box .label {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    display: block;
+    margin-bottom: 4px;
+    opacity: 0.8;
+  }
+
+  #report {
+    display: none;
+    margin-top: 28px;
+  }
+
+  .report-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  .report-head .final-url {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--ink-soft);
+    word-break: break-all;
+  }
+
+  .status-pill {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-pill.ok { background: #e4f3ea; color: var(--good); }
+  .status-pill.warn { background: #fbeecb; color: #92600a; }
+  .status-pill.err { background: #fbeceb; color: var(--bad); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .tile {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+
+  .tile .k {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+
+  .tile .v {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .tile .v.flag { color: var(--bad); }
+  .tile .v.clean { color: var(--good); }
+
+  .text-fields {
+    display: grid;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .text-tile {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+
+  .text-tile .k {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+
+  .text-tile .v {
+    font-size: 14.5px;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+
+  .text-tile .v.empty {
+    color: var(--ink-soft);
+    font-style: italic;
+  }
+
+  footer {
+    margin-top: auto;
+    padding-top: 40px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-soft);
+    text-align: center;
+  }
+
+  @media (max-width: 480px) {
+    form { flex-direction: column; }
+    button#submit-btn { padding: 12px; }
+  }
+
+  /* URL Editor Panel Styling */
+  .editor-toggle-container {
+    margin-top: 14px;
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  .editor-toggle-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink-soft);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+  }
+
+  .editor-toggle-btn:hover {
+    border-color: var(--amber);
+    color: var(--amber-deep);
+    background: rgba(181, 115, 10, 0.04);
+  }
+
+  .editor-toggle-btn.active {
+    border-color: var(--amber);
+    color: var(--ink);
+    background: rgba(181, 115, 10, 0.08);
+  }
+
+  .editor-toggle-btn .toggle-icon {
+    transition: transform 0.3s ease;
+  }
+
+  .editor-toggle-btn.active .toggle-icon {
+    transform: rotate(45deg);
+  }
+
+  .editor-panel {
+    display: none;
+    margin-top: 14px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    animation: slideDown 0.25s ease-out;
+  }
+
+  .editor-panel.show {
+    display: block;
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .editor-grid {
+    display: grid;
+    grid-template-columns: 100px 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  @media (max-width: 580px) {
+    .editor-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .editor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .editor-field label {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ink-soft);
+  }
+
+  .editor-field input, .editor-field select {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    color: var(--ink);
+    background: var(--panel);
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .editor-field input:focus, .editor-field select:focus {
+    border-color: var(--amber);
+  }
+
+  .params-section {
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+    margin-bottom: 18px;
+  }
+
+  .params-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .params-title {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ink-soft);
+  }
+
+  .add-btn {
+    background: transparent;
+    border: 1px dashed var(--line);
+    border-radius: 6px;
+    color: var(--ink-soft);
+    font-family: var(--sans);
+    font-weight: 500;
+    font-size: 11.5px;
+    padding: 5px 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+  }
+
+  .add-btn:hover {
+    border-color: var(--amber);
+    color: var(--amber-deep);
+    background: rgba(181, 115, 10, 0.04);
+  }
+
+  .params-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .param-row {
+    display: grid;
+    grid-template-columns: 1fr 15px 1.5fr 36px;
+    align-items: center;
+    gap: 8px;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .param-row input {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--ink);
+    background: var(--panel);
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .param-row input:focus {
+    border-color: var(--amber);
+  }
+
+  .param-equals {
+    text-align: center;
+    font-family: var(--mono);
+    color: var(--line);
+    font-size: 14px;
+    user-select: none;
+  }
+
+  .delete-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--ink-soft);
+    border-radius: 6px;
+    height: 34px;
+    width: 36px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .delete-btn:hover {
+    color: var(--bad);
+    border-color: rgba(179, 38, 30, 0.15);
+    background: rgba(179, 38, 30, 0.04);
+  }
+
+  .hash-section {
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="eyebrow"><span class="dot"></span>Page Scan</div>
+      <h1>Point it at a URL. Get the readout.</h1>
+      <p>Status, timing, title, meta description, headings, image alt-text gaps, and word count — pulled straight from the live page.</p>
+    </header>
+
+    <form id="audit-form">
+      <input
+        id="url-input"
+        type="text"
+        name="url"
+        placeholder="example.com or https://example.com/page"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button id="submit-btn" type="submit">Scan</button>
+    </form>
+    <div class="hint">No scheme needed — we'll assume https:// if you leave it off.</div>
+
+    <!-- URL Editor Toggle -->
+    <div class="editor-toggle-container">
+      <button type="button" id="toggle-editor-btn" class="editor-toggle-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="toggle-icon"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <span>Advanced URL Editor</span>
+      </button>
+    </div>
+
+    <!-- URL Editor Panel -->
+    <div id="url-editor-panel" class="editor-panel">
+      <!-- Base URL Grid (Protocol, Host, Path) -->
+      <div class="editor-grid">
+        <div class="editor-field">
+          <label for="editor-protocol">Protocol</label>
+          <select id="editor-protocol">
+            <option value="https://">https://</option>
+            <option value="http://">http://</option>
+          </select>
+        </div>
+        <div class="editor-field">
+          <label for="editor-host">Hostname</label>
+          <input type="text" id="editor-host" placeholder="example.com" spellcheck="false" autocomplete="off" />
+        </div>
+        <div class="editor-field">
+          <label for="editor-path">Path</label>
+          <input type="text" id="editor-path" placeholder="/path" spellcheck="false" autocomplete="off" />
+        </div>
+      </div>
+
+      <!-- Query Parameters Section -->
+      <div class="params-section">
+        <div class="params-header">
+          <span class="params-title">Query Parameters</span>
+          <button type="button" id="add-param-btn" class="add-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Add Parameter
+          </button>
+        </div>
+        <div id="params-list" class="params-list">
+          <!-- Parameter rows added dynamically -->
+        </div>
+      </div>
+
+      <!-- Hash / Anchor Section -->
+      <div class="hash-section">
+        <div class="editor-field">
+          <label for="editor-hash">Hash / Anchor</label>
+          <input type="text" id="editor-hash" placeholder="#section-1" spellcheck="false" autocomplete="off" />
+        </div>
+      </div>
+    </div>
+
+    <div class="scan-track" id="scan-track"><div class="beam"></div></div>
+    <div class="status-line" id="status-line"></div>
+
+    <div id="error-box">
+      <span class="label">Scan failed</span>
+      <span id="error-text"></span>
+    </div>
+
+    <div id="report">
+      <div class="report-head">
+        <div class="final-url" id="final-url"></div>
+        <div class="status-pill" id="status-pill"></div>
+      </div>
+
+      <div class="grid">
+        <div class="tile">
+          <div class="k">Response time</div>
+          <div class="v" id="v-time">—</div>
+        </div>
+        <div class="tile">
+          <div class="k">H1 count</div>
+          <div class="v" id="v-h1">—</div>
+        </div>
+        <div class="tile">
+          <div class="k">Images</div>
+          <div class="v" id="v-images">—</div>
+        </div>
+        <div class="tile">
+          <div class="k">Missing alt text</div>
+          <div class="v" id="v-alt">—</div>
+        </div>
+        <div class="tile">
+          <div class="k">Word count</div>
+          <div class="v" id="v-words">—</div>
+        </div>
+        <div class="tile">
+          <div class="k">Content type</div>
+          <div class="v" id="v-ctype" style="font-size:12.5px; word-break: break-all;">—</div>
+        </div>
+      </div>
+
+      <div class="text-fields">
+        <div class="text-tile">
+          <div class="k">Title</div>
+          <div class="v" id="v-title"></div>
+        </div>
+        <div class="text-tile">
+          <div class="k">Meta description</div>
+          <div class="v" id="v-desc"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer>url-auditor · runs the fetch server-side, so no CORS headaches</footer>
+  </div>
+
+<script>
+  const form = document.getElementById('audit-form');
+  const input = document.getElementById('url-input');
+  const btn = document.getElementById('submit-btn');
+  const scanTrack = document.getElementById('scan-track');
+  const statusLine = document.getElementById('status-line');
+  const errorBox = document.getElementById('error-box');
+  const errorText = document.getElementById('error-text');
+  const report = document.getElementById('report');
+
+  // URL Editor Elements
+  const toggleEditorBtn = document.getElementById('toggle-editor-btn');
+  const urlEditorPanel = document.getElementById('url-editor-panel');
+  const editorProtocol = document.getElementById('editor-protocol');
+  const editorHost = document.getElementById('editor-host');
+  const editorPath = document.getElementById('editor-path');
+  const editorHash = document.getElementById('editor-hash');
+  const addParamBtn = document.getElementById('add-param-btn');
+  const paramsList = document.getElementById('params-list');
+
+  let isUpdating = false;
+
+  // Toggle editor visibility
+  toggleEditorBtn.addEventListener('click', () => {
+    const isShown = urlEditorPanel.classList.toggle('show');
+    toggleEditorBtn.classList.toggle('active', isShown);
+    if (isShown) {
+      updateEditorFromMain();
+    }
+  });
+
+  // URL parser helper
+  function parseInputUrl(urlString) {
+    let url = urlString.trim();
+    if (!url) return null;
+    if (url === 'https://' || url === 'http://') return null;
+
+    // Treat domain-only inputs without scheme as https
+    if (!/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(url)) {
+      url = 'https://' + url;
+    }
+
+    try {
+      return new URL(url);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Update editor fields from main input
+  function updateEditorFromMain() {
+    if (isUpdating) return;
+    isUpdating = true;
+
+    const mainUrl = input.value.trim();
+    
+    if (!mainUrl) {
+      editorHost.value = '';
+      editorPath.value = '';
+      editorHash.value = '';
+      paramsList.innerHTML = '';
+      isUpdating = false;
+      return;
+    }
+
+    const parsed = parseInputUrl(mainUrl);
+
+    if (parsed) {
+      const protoVal = parsed.protocol + '//';
+      if (protoVal === 'https://' || protoVal === 'http://') {
+        editorProtocol.value = protoVal;
+      }
+
+      editorHost.value = parsed.hostname;
+      editorPath.value = parsed.pathname;
+      editorHash.value = parsed.hash;
+
+      paramsList.innerHTML = '';
+      parsed.searchParams.forEach((val, key) => {
+        addParamRow(key, val);
+      });
+    }
+
+    isUpdating = false;
+  }
+
+  // Reconstruct URL from editor fields and write to main input
+  function updateMainFromEditor() {
+    if (isUpdating) return;
+    isUpdating = true;
+
+    const protocol = editorProtocol.value;
+    const host = editorHost.value.trim();
+    const path = editorPath.value.trim();
+    const hash = editorHash.value.trim();
+
+    let urlString = '';
+    if (host) {
+      urlString += protocol + host;
+      if (path) {
+        if (!path.startsWith('/')) {
+          urlString += '/';
+        }
+        urlString += path;
+      }
+
+      const params = new URLSearchParams();
+      const rows = paramsList.querySelectorAll('.param-row');
+      rows.forEach(row => {
+        const keyInput = row.querySelector('.param-key');
+        const valInput = row.querySelector('.param-value');
+        if (keyInput && valInput) {
+          const key = keyInput.value.trim();
+          const val = valInput.value.trim();
+          if (key) {
+            params.append(key, val);
+          }
+        }
+      });
+
+      const search = params.toString();
+      if (search) {
+        urlString += '?' + search;
+      }
+
+      if (hash) {
+        if (hash.startsWith('#')) {
+          urlString += hash;
+        } else {
+          urlString += '#' + hash;
+        }
+      }
+    } else {
+      // Just keep path or partial if no host
+      if (path) {
+        urlString += path;
+      }
+    }
+
+    input.value = urlString;
+    isUpdating = false;
+  }
+
+  // Add a parameter row
+  function addParamRow(key = '', val = '') {
+    const row = document.createElement('div');
+    row.className = 'param-row';
+
+    const keyInput = document.createElement('input');
+    keyInput.type = 'text';
+    keyInput.className = 'param-key';
+    keyInput.placeholder = 'key';
+    keyInput.value = key;
+    keyInput.spellcheck = false;
+    keyInput.autocomplete = 'off';
+
+    const equalsSpan = document.createElement('span');
+    equalsSpan.className = 'param-equals';
+    equalsSpan.textContent = '=';
+
+    const valInput = document.createElement('input');
+    valInput.type = 'text';
+    valInput.className = 'param-value';
+    valInput.placeholder = 'value';
+    valInput.value = val;
+    valInput.spellcheck = false;
+    valInput.autocomplete = 'off';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'delete-btn';
+    deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`;
+
+    keyInput.addEventListener('input', updateMainFromEditor);
+    valInput.addEventListener('input', updateMainFromEditor);
+    deleteBtn.addEventListener('click', () => {
+      row.remove();
+      updateMainFromEditor();
+    });
+
+    row.appendChild(keyInput);
+    row.appendChild(equalsSpan);
+    row.appendChild(valInput);
+    row.appendChild(deleteBtn);
+
+    paramsList.appendChild(row);
+  }
+
+  // Listeners for manual editing
+  input.addEventListener('input', updateEditorFromMain);
+  editorProtocol.addEventListener('change', updateMainFromEditor);
+  editorHost.addEventListener('input', updateMainFromEditor);
+  editorPath.addEventListener('input', updateMainFromEditor);
+  editorHash.addEventListener('input', updateMainFromEditor);
+  addParamBtn.addEventListener('click', () => {
+    addParamRow();
+    updateMainFromEditor();
+  });
+
+  function resetPanels() {
+    errorBox.style.display = 'none';
+    report.style.display = 'none';
+    statusLine.textContent = '';
+  }
+
+  function setLoading(isLoading) {
+    btn.disabled = isLoading;
+    btn.textContent = isLoading ? 'Scanning…' : 'Scan';
+    scanTrack.classList.toggle('active', isLoading);
+  }
+
+  function pillClass(status) {
+    if (status >= 200 && status < 300) return 'ok';
+    if (status >= 300 && status < 500) return 'warn';
+    return 'err';
+  }
+
+  function fillText(el, value, emptyLabel) {
+    if (value === null || value === undefined || value === '') {
+      el.textContent = emptyLabel;
+      el.classList.add('empty');
+    } else {
+      el.textContent = value;
+      el.classList.remove('empty');
+    }
+  }
+
+  function renderReport(data) {
+    document.getElementById('final-url').textContent = data.finalUrl || data.url;
+
+    const pill = document.getElementById('status-pill');
+    pill.textContent = 'HTTP ' + data.status;
+    pill.className = 'status-pill ' + pillClass(data.status);
+
+    document.getElementById('v-time').textContent = data.responseTimeMs + ' ms';
+    document.getElementById('v-h1').textContent = data.h1Count;
+
+    document.getElementById('v-images').textContent = data.images.total;
+
+    const altEl = document.getElementById('v-alt');
+    altEl.textContent = data.images.missingAlt;
+    altEl.className = 'v ' + (data.images.missingAlt > 0 ? 'flag' : 'clean');
+
+    document.getElementById('v-words').textContent = data.wordCount.toLocaleString();
+    document.getElementById('v-ctype').textContent = data.contentType || '—';
+
+    fillText(document.getElementById('v-title'), data.title, 'No <title> tag found');
+    fillText(document.getElementById('v-desc'), data.metaDescription, 'No meta description found');
+
+    report.style.display = 'block';
+  }
+
+  function renderError(message) {
+    errorText.textContent = message;
+    errorBox.style.display = 'block';
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = input.value.trim();
+    if (!url) return;
+
+    resetPanels();
+    setLoading(true);
+    statusLine.textContent = 'Fetching ' + url + ' …';
+
+    try {
+      const res = await fetch('/api/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        throw new Error('Server returned an unreadable response.');
+      }
+
+      if (!res.ok) {
+        renderError(data.error || ('Request failed (HTTP ' + res.status + ')'));
+        return;
+      }
+
+      renderReport(data);
+    } catch (err) {
+      renderError(err.message || 'Something went wrong reaching the audit service.');
+    } finally {
+      setLoading(false);
+      statusLine.textContent = '';
+    }
+  });
+</script>
+</body>
+</html>

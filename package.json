@@ -1,0 +1,19 @@
+{
+  "name": "url-auditor",
+  "version": "1.0.0",
+  "description": "Fetches a URL and returns a JSON page-health report (status, timing, title, meta description, H1 count, missing-alt images, word count).",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
